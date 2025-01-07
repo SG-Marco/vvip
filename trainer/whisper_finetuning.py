@@ -48,9 +48,9 @@ model = AudioPromptingWhisper(
     freeze_whisper=True   # Whisper 파라미터 동결, delta만 학습
 )
 
-model.generation_config.language = "english"
-model.generation_config.task = "transcribe"
-model.generation_config.forced_decoder_ids = None
+model.whisper.generation_config.language = "english"
+model.whisper.generation_config.task = "transcribe"
+model.whisper.generation_config.forced_decoder_ids = None
 
 import torch
 from dataclasses import dataclass
