@@ -22,7 +22,7 @@ class AudioPromptingWhisper(nn.Module):
                 param.requires_grad = False
 
         # 2) AudioPrompter 초기화
-        self.prompter = AudioPrompter(num_mel_bins=80, max_frames=max_frames)
+        self.prompter = AudioPrompter(num_mel_bins=128, max_frames=max_frames)
 
     def forward(self, input_features, labels=None, **kwargs):
         """
@@ -30,6 +30,8 @@ class AudioPromptingWhisper(nn.Module):
         - batch 딕셔너리에는 "input_features", "labels" 등이 들어있음.
         - input_features shape: (batch_size, 80, frames)
         """
+
+        kwargs.pop("num_items_in_batch", None)
         # 오디오 프롬프트 적용
         prompted_features = self.prompter(input_features)  # (B,80,frames)
 
