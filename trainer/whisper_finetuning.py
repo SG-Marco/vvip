@@ -121,7 +121,7 @@ training_args = Seq2SeqTrainingArguments(
     max_steps=4000,
     gradient_checkpointing=True,
     fp16=True,
-    evaluation_strategy="steps",
+    eval_strategy="steps",
     per_device_eval_batch_size=8,
     predict_with_generate=True,
     generation_max_length=225,
@@ -132,7 +132,7 @@ training_args = Seq2SeqTrainingArguments(
     load_best_model_at_end=True,
     metric_for_best_model="wer",
     greater_is_better=False,
-    push_to_hub=True,
+    push_to_hub=False,
 )
 
 from transformers import Seq2SeqTrainer
@@ -144,7 +144,7 @@ trainer = Seq2SeqTrainer(
     eval_dataset=common_voice["test"],
     data_collator=data_collator,
     compute_metrics=compute_metrics,
-    tokenizer=processor.feature_extractor,
+    processing_class=processor.feature_extractor,
 )
 
 processor.save_pretrained(training_args.output_dir)
