@@ -87,7 +87,7 @@ class DataCollatorSpeechSeq2SeqWithPadding:
 
 data_collator = DataCollatorSpeechSeq2SeqWithPadding(
     processor=processor,
-    decoder_start_token_id=model.config.decoder_start_token_id,
+    decoder_start_token_id=model.whisper.config.decoder_start_token_id,
 )
     
 import evaluate
