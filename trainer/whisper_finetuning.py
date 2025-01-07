@@ -38,15 +38,26 @@ def prepare_dataset(batch):
 
 common_voice = common_voice.map(prepare_dataset, remove_columns=common_voice.column_names["train"], num_proc=2)
 
-
+from transformers import WhisperConfig
 from audio_prompting_whisper import AudioPromptingWhisper
 
-# AudioPromptingWhisper 내부에서 WhisperForConditionalGeneration + AudioPrompter 생성
+# Whisper 설정
+whisper_config = WhisperConfig.from_pretrained("openai/whisper-large-v3")
+prompter_config = {"max_frames": 3000}
+
+# AudioPromptingWhisper 모델 생성
 model = AudioPromptingWhisper(
-    base_model_name="openai/whisper-large-v3",
-    max_frames=3000,  # 필요에 맞춰 조정
-    freeze_whisper=True   # Whisper 파라미터 동결, delta만 학습
+    whisper_config, 
+    prompter_config=prompter_config, 
+    freeze_whisper=True  # Whisper 파라미터 동결
 )
+
+# AudioPromptingWhisper 내부에서 WhisperForConditionalGeneration + AudioPrompter 생성
+# model = AudioPromptingWhisper(
+#     base_model_name="openai/whisper-large-v3",
+#     max_frames=3000,  # 필요에 맞춰 조정
+#     freeze_whisper=True   # Whisper 파라미터 동결, delta만 학습
+# )
 
 model.whisper.generation_config.language = "english"
 model.whisper.generation_config.task = "transcribe"
