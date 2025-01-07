@@ -93,18 +93,18 @@ class AudioPromptingWhisper(WhisperForConditionalGeneration):
         self.prompter.load_state_dict(torch.load(path))
         print(f"[AudioPromptingWhisper] Loaded delta params from {path}")
 
-    def gradient_checkpointing_enable(self, **kwargs):
-        """
-        중간에 self.whisper가 PreTrainedModel이면 
-        whisper.gradient_checkpointing_enable() 호출을 중계
-        """
-        if hasattr(self.whisper, "gradient_checkpointing_enable"):
-            self.whisper.gradient_checkpointing_enable(**kwargs)
-        else:
-            raise AttributeError("Whisper model does not support gradient_checkpointing_enable.")
+    # def gradient_checkpointing_enable(self, **kwargs):
+    #     """
+    #     중간에 self.whisper가 PreTrainedModel이면 
+    #     whisper.gradient_checkpointing_enable() 호출을 중계
+    #     """
+    #     if hasattr(self.whisper, "gradient_checkpointing_enable"):
+    #         self.whisper.gradient_checkpointing_enable(**kwargs)
+    #     else:
+    #         raise AttributeError("Whisper model does not support gradient_checkpointing_enable.")
 
-    def gradient_checkpointing_disable(self):
-        if hasattr(self.whisper, "gradient_checkpointing_disable"):
-            self.whisper.gradient_checkpointing_disable()
-        else:
-            raise AttributeError("Whisper model does not support gradient_checkpointing_disable.")
+    # def gradient_checkpointing_disable(self):
+    #     if hasattr(self.whisper, "gradient_checkpointing_disable"):
+    #         self.whisper.gradient_checkpointing_disable()
+    #     else:
+    #         raise AttributeError("Whisper model does not support gradient_checkpointing_disable.")
