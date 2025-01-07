@@ -54,6 +54,7 @@ class AudioPromptingWhisper(WhisperForConditionalGeneration):
         """
         super().__init__(config)
         # Prompter 초기화
+        
         self.prompter = AudioPrompter(num_mel_bins=128, max_frames=prompter_config.get("max_frames", 3000))
 
         # Whisper 모델의 파라미터를 freeze
@@ -63,11 +64,15 @@ class AudioPromptingWhisper(WhisperForConditionalGeneration):
 
     def forward(self, input_features, labels=None, **kwargs):
         """
-        Whisper의 forward 메서드를 재정의하여 Prompter를 적용.
+        Whisper forward 호출 시 추가된 키워드 인수를 처리.
         """
         # Prompter를 통해 delta 적용
         prompted_features = self.prompter(input_features)
-        # Whisper의 원래 forward 호출
+
+        # 사용되지 않는 키 제거
+        kwargs.pop("num_items_in_batch", None)
+
+        # Whisper forward 호출
         return super().forward(input_features=prompted_features, labels=labels, **kwargs)
 
     # def generate(self, input_features, **kwargs):
