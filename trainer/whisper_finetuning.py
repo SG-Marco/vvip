@@ -114,7 +114,7 @@ from transformers import Seq2SeqTrainingArguments
 
 training_args = Seq2SeqTrainingArguments(
     output_dir="./whisper-large-v3-en",  # change to a repo name of your choice
-    use_safetensors=False,
+    # use_safetensors=False,
     per_device_train_batch_size=16,
     gradient_accumulation_steps=1,  # increase by 2x for every 2x decrease in batch size
     learning_rate=1e-5,
