@@ -36,22 +36,20 @@ def prepare_dataset(batch):
 common_voice = common_voice.map(prepare_dataset, remove_columns=common_voice.column_names["train"], num_proc=2)
 
 
-from audio_prompting_whisper import AudioPromptingWhisper
+from .audio_prompting_whisper import AudioPromptingWhisper
 
 # AudioPromptingWhisper 내부에서 WhisperForConditionalGeneration + AudioPrompter 생성
 model = AudioPromptingWhisper(
     base_model_name="openai/whisper-large-v3",
-    max_frames=3000  # 필요에 맞춰 조정
+    max_frames=3000,  # 필요에 맞춰 조정
+    freeze_whisper=True   # Whisper 파라미터 동결, delta만 학습
 )
 
 model.generation_config.language = "english"
 model.generation_config.task = "transcribe"
-
 model.generation_config.forced_decoder_ids = None
 
-
 import torch
-
 from dataclasses import dataclass
 from typing import Any, Dict, List, Union
 
@@ -85,8 +83,8 @@ class DataCollatorSpeechSeq2SeqWithPadding:
     
 
 data_collator = DataCollatorSpeechSeq2SeqWithPadding(
-processor=processor,
-decoder_start_token_id=model.config.decoder_start_token_id,
+    processor=processor,
+    decoder_start_token_id=model.config.decoder_start_token_id,
 )
     
 import evaluate
@@ -149,3 +147,8 @@ trainer = Seq2SeqTrainer(
 processor.save_pretrained(training_args.output_dir)
 
 trainer.train()
+
+# 학습 끝난 후 delta 저장
+model.save_delta(path="audio_delta_final.pth")
+
+print("Done!")
