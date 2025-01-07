@@ -14,7 +14,7 @@ import numpy as np
 import whisper
 from torch.utils.data import DataLoader, Dataset
 
-from .audio_prompters import audio_coordinator  # (or your custom AudioPrompter)
+from audio_prompters import audio_coordinator  # (or your custom AudioPrompter)
 # from .audio_prompting_whisper import AudioPromptingWhisper  # alternative approach
 
 class SimpleWaveformDataset(Dataset):

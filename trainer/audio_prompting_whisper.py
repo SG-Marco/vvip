@@ -4,7 +4,7 @@ import torch
 import torch.nn as nn
 import torch.nn.functional as F
 from transformers import WhisperForConditionalGeneration
-from .audio_prompter import AudioPrompter
+from audio_prompter import AudioPrompter
 
 class AudioPromptingWhisper(nn.Module):
     """

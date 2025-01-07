@@ -8,6 +8,9 @@ common_voice = DatasetDict()
 common_voice["train"] = load_dataset(DATASET_ID, 'default', split="train")
 common_voice["test"] = load_dataset(DATASET_ID, 'default', split="test")
 
+# 2) 데이터셋 일부 샘플만 선택 
+common_voice["train"] = common_voice["train"].select(range(10))
+common_voice["test"] = common_voice["test"].select(range(10))
 
 # audio와 lable text를 제외하고 모두 삭제
 common_voice = common_voice.remove_columns(["id", "segment_start_time", "segment_end_time", "duration"])
@@ -36,7 +39,7 @@ def prepare_dataset(batch):
 common_voice = common_voice.map(prepare_dataset, remove_columns=common_voice.column_names["train"], num_proc=2)
 
 
-from .audio_prompting_whisper import AudioPromptingWhisper
+from audio_prompting_whisper import AudioPromptingWhisper
 
 # AudioPromptingWhisper 내부에서 WhisperForConditionalGeneration + AudioPrompter 생성
 model = AudioPromptingWhisper(
