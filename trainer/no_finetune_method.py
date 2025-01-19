@@ -183,7 +183,7 @@ delta_learner = DeltaLearner(num_mel_bins=NUM_MEL_BINS, max_frames=3000, eps=0.0
 
 
 # 학습 루프
-max_steps = 10  # 적당히 줄인 학습 스텝
+max_steps = 1  # 적당히 줄인 학습 스텝
 log_interval = 1
 
 # 학습 루프 수정

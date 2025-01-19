@@ -12,7 +12,7 @@ print(f"Using device: {device}")
 ########### 변수 설정 #########################
 #############################################
 
-MAX_STEPS = 0
+MAX_STEPS = 5
 LOG_INTERVER = 1
 
 EPSILON = 0.001  # SPSA Perturbation 크기
@@ -44,13 +44,12 @@ def calculate_loss(whisper_model, mel_with_delta, labels):
     labels: ground truth token IDs
     """
     outputs = whisper_model(input_features=mel_with_delta, labels=labels)
-    # print(outputs.logits)
-    return outputs.loss  # CrossEntropy loss 아웃풋에서 텍스트 뽑아서 prediction이랑비교하기
+    return outputs.loss  # CrossEntropy loss
 
 wer_metric = evaluate.load("wer")
 
-def calculate_wer(references, predictions): 
-    return wer_metric.compute(references=references, predictions=predictions)
+def calculate_wer(predictions, references): # pred, ref 순서 맞는지 확인 필요
+    return wer_metric.compute(predictions=predictions, references=references)
 
 # SPSA 업데이트 함수
 def spsa_update(coordinator, whisper_model, mel, labels, epsilon, alpha, gamma, step, loss):
@@ -75,7 +74,7 @@ def spsa_update(coordinator, whisper_model, mel, labels, epsilon, alpha, gamma, 
         predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
         ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
         pred_texts = tokenizer.batch_decode(predictions, skip_special_tokens=True)
-        loss_plus = calculate_wer(ref_texts, pred_texts)
+        loss_plus = calculate_wer(pred_texts, ref_texts)
 
         # Negative Perturbation
         coordinator.encoder.body[0].weight.data -= 2 * perturb
@@ -83,7 +82,7 @@ def spsa_update(coordinator, whisper_model, mel, labels, epsilon, alpha, gamma, 
         mel_with_delta = mel + mel_transformed  # 결합
         predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
         pred_texts = tokenizer.batch_decode(predictions, skip_special_tokens=True)
-        loss_minus = calculate_wer(ref_texts, pred_texts)
+        loss_minus = calculate_wer(pred_texts, ref_texts)
 
         # SPSA Gradient 근사
         grad_estimate = (loss_plus - loss_minus) / (2 * epsilon * perturb)
@@ -169,10 +168,10 @@ for step, batch in enumerate(processed_dataset):
             z, mel_transformed = coordinator(mel)
             mel_with_delta = mel + mel_transformed 
  
-            predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS) # 영어 강제 필요한가? 안되는듯 ValueError: The following `model_kwargs` are not used by the model: ['language'] (note: typos in the generate arguments will also show up in this list)
+            predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
             pred_texts = tokenizer.batch_decode(predictions, skip_special_tokens=True)
             ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
-            wer = calculate_wer(ref_texts, pred_texts)
+            wer = calculate_wer(pred_texts, ref_texts)
             print(ref_texts[0])
             print(pred_texts[0])
 
