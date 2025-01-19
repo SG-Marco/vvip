@@ -96,4 +96,4 @@ class Coordinator(nn.Module):
         # Mel 데이터를 입력으로 받아 Encoder 통과
         z = self.encoder(x)
         reconstructed = self.decoder(z)
-        return reconstructed, z
+        return z, reconstructed
