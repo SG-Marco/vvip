@@ -92,74 +92,6 @@ import torch
 import torch.nn as nn
 from transformers import ViTModel
 
-'''
-class ViTForAudio(nn.Module):
-    def __init__(self, encoder_name="google/vit-base-patch16-224-in21k", mel_bins=80, frames=3000, hidden_dim=768):
-        super(ViTForAudio, self).__init__()
-
-        self.mel_bins = mel_bins
-        self.frames = frames
-        # ✅ **ViT Encoder (Frozen)**
-        self.encoder = ViTModel.from_pretrained(encoder_name)
-        for param in self.encoder.parameters():
-            param.requires_grad = False  # **Encoder는 학습 X**
-
-        # ✅ **Mel Spectrogram 변환 (1채널 → 3채널)**
-        self.conv1x1_in = nn.Conv2d(in_channels=1, out_channels=3, kernel_size=1)
-
-        # ✅ **Mel Spectrogram 크기 변환 (80×3000 → 224×224)**
-        self.resize = nn.AdaptiveAvgPool2d((224, 224))
-
-        # ✅ **Trigger Vector (학습 가능)**
-        self.p_trigger = nn.Parameter(torch.randn(1, hidden_dim))  # (1, hidden_dim)
-
-        # ✅ **Transformer 기반 Decoder**
-        decoder_layer = nn.TransformerDecoderLayer(d_model=hidden_dim, nhead=8, dim_feedforward=2048, dropout=0.1)
-        self.decoder = nn.TransformerDecoder(decoder_layer, num_layers=6)
-
-        # ✅ **Decoder 출력 변환 (Mel Spectrogram 형태)**
-        # self.output_layer = nn.Linear(hidden_dim, mel_bins * frames)
-        self.output_layer = nn.Linear(hidden_dim, 3 * mel_bins * frames)
-
-        # ✅ **3채널 → 1채널 변환 (출력)**
-        self.conv1x1_out = nn.Conv2d(in_channels=3, out_channels=1, kernel_size=1)
-
-    def forward(self, x):
-        """
-        x: (batch_size, mel_bins, frames) 형태의 Mel Spectrogram을 지원
-        """
-        # ✅ **1채널 추가 (batch_size, mel_bins, frames) → (batch_size, 1, mel_bins, frames)**
-        if x.dim() == 3:  
-            x = x.unsqueeze(1)  # (batch_size, 1, mel_bins, frames)
-
-        # ✅ **1채널 → 3채널 변환**
-        x = self.conv1x1_in(x)  # (batch_size, 3, mel_bins, frames)
-
-        # ✅ **80×3000 → 224×224 크기로 변환**
-        x = self.resize(x)  # (batch_size, 3, 224, 224)
-
-        # ✅ **ViT Encoder 통과**
-        encoder_outputs = self.encoder(x).last_hidden_state  # (batch_size, num_patches, hidden_dim)
-
-        # ✅ **Trigger Vector 추가**
-        z_with_trigger = encoder_outputs[:, 0, :] + self.p_trigger  # (batch_size, hidden_dim)
-
-        # ✅ **Transformer Decoder 통과**
-        z_with_trigger = z_with_trigger.unsqueeze(0)  # (1, batch_size, hidden_dim) → Transformer Decoder 입력
-        mel_features = self.decoder(z_with_trigger, encoder_outputs.transpose(0, 1))  # (batch_size, hidden_dim)
-
-        # ✅ **Mel Spectrogram 복원**
-        mel_output = self.output_layer(mel_features)  # (batch_size, 3 * mel_bins * frames)
-        mel_output = mel_output.view(-1, 3, self.mel_bins, self.frames)  # (batch_size, 3, mel_bins, frames)
-
-        # ✅ **3채널 → 1채널 변환**
-        mel_output = self.conv1x1_out(mel_output)  # (batch_size, 1, mel_bins, frames)
-
-        # ✅ **1채널 제거 (batch_size, mel_bins, frames)**
-        mel_output = mel_output.squeeze(1)  # (batch_size, mel_bins, frames)
-
-        return z_with_trigger, mel_output      
-'''
 
 class Coordinator(nn.Module):
     def __init__(self, encoder_name="google/vit-base-patch16-224-in21k", mel_bins=80, frames=3000, src_dim=1568, hidden_dim=768):
@@ -347,7 +279,7 @@ class SPSA:
         self.ck = self.ck / (step**self.gamma)
 
 
-    def spsa_update(self, coordinator, whisper_model, mel, labels):
+    def spsa_update(self, coordinator, whisper_model, mel: list, labels: list):
         """
         coordinator: Coordinator instance
         whisper_model: Whisper 모델 (frozen)
@@ -355,43 +287,65 @@ class SPSA:
         labels: Ground Truth 라벨
         """
 
-        print(f"p_trigger requires_grad: {coordinator.dec.p_trigger.requires_grad}")
-
-
-
         # **1. 디코더 전체의 파라미터를 벡터화**
         coordinator_params = torch.nn.utils.parameters_to_vector(coordinator.dec.parameters()).detach()
         
         # **2. 랜덤 Perturbation 생성**
         perturb = torch.sign(torch.randn_like(coordinator_params)) * self.epsilon
 
+
+
+        # ✅ 배치 전체에 대한 SPSA 업데이트 수행
+        loss_plus_list = []
+        loss_minus_list = []
+
         # **3. Positive Perturbation 적용**
         perturbed_params = coordinator_params + perturb
         torch.nn.utils.vector_to_parameters(perturbed_params, coordinator.dec.parameters())
-        _, mel_transformed = coordinator(mel)
-        mel_with_delta = mel + mel_transformed  
 
-        predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
-        ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
-        pred_texts = tokenizer.batch_decode(predictions, skip_special_tokens=True)
-        loss_plus = calculate_wer(ref_texts, pred_texts, tokenizer)
+        for i in range(mel.shape[0]):  # 배치 크기만큼 반복
+            mel_i = mel[i].unsqueeze(0)  # 개별 샘플 추출
+            labels_i = labels[i].unsqueeze(0)  # 개별 샘플의 라벨 추출
+
+            _, mel_transformed = coordinator(mel_i)
+            mel_with_delta = mel_i + mel_transformed  
+
+            predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
+            ref_texts = tokenizer.batch_decode(labels_i, skip_special_tokens=True)
+            pred_texts = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+            loss_plus = calculate_wer(ref_texts, pred_texts, tokenizer)
+
+            loss_plus_list.append(loss_plus)
 
         # **4. Negative Perturbation 적용**
         perturbed_params = coordinator_params - perturb
         torch.nn.utils.vector_to_parameters(perturbed_params, coordinator.dec.parameters())
-        _, mel_transformed = coordinator(mel)
-        mel_with_delta = mel + mel_transformed  
 
-        predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
-        pred_texts = tokenizer.batch_decode(predictions, skip_special_tokens=True)
-        loss_minus = calculate_wer(ref_texts, pred_texts, tokenizer)
+        for i in range(mel.shape[0]):  # 배치 크기만큼 반복
+            mel_i = mel[i].unsqueeze(0)  # 개별 샘플 추출
+            labels_i = labels[i].unsqueeze(0)  # 개별 샘플의 라벨 추출
+
+            _, mel_transformed = coordinator(mel_i)
+            mel_with_delta = mel_i + mel_transformed  
+
+            predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
+            pred_texts = tokenizer.batch_decode(predictions, skip_special_tokens=True)
+            loss_minus = calculate_wer(ref_texts, pred_texts, tokenizer)
+
+            loss_minus_list.append(loss_minus)
+
+        # ✅ 배치 내 모든 샘플의 평균 loss 계산
+        loss_plus_avg = sum(loss_plus_list) / len(loss_plus_list)
+        loss_minus_avg = sum(loss_minus_list) / len(loss_minus_list)
+
+        # ✅ 배치 내 모든 샘플의 평균 gradient 계산
+        grad_estimate_avg =  (loss_plus_avg - loss_minus_avg) / (2 * self.ck * perturb)
 
         # coordinator parameters 원래 값으로 다시 변경
         torch.nn.utils.vector_to_parameters(coordinator_params, coordinator.dec.parameters())
 
         # SPSA Gradient 근사
-        grad_estimate = (loss_plus - loss_minus) / (2 * self.ck * perturb)
-        print(f"Gradient estimate: {grad_estimate}")
+        print(f"Gradient estimate: {grad_estimate_avg}")
 
         learning_rate = self.ak
         print("before update")
@@ -399,19 +353,12 @@ class SPSA:
 
 
         # **5. Coordinator 업데이트**
-        # torch.nn.utils.vector_to_parameters(
-        #     learning_rate * grad_estimate, 
-        #     coordinator.dec.parameters()
-        # )
-        # print(coordinator.dec.p_trigger)
-
-
-
+        # p_trigger와 decoder의 파라미터 개수 계산
         p_trigger_param_num = coordinator.dec.p_trigger.numel()
 
         # p_trigger와 decoder의 gradient를 분리
-        p_trigger_grad = grad_estimate[:p_trigger_param_num]  # 앞부분 → p_trigger의 gradient
-        decoder_grad = grad_estimate[p_trigger_param_num:]  # 뒷부분 → decoder의 gradient
+        p_trigger_grad = grad_estimate_avg[:p_trigger_param_num]  # 앞부분 → p_trigger의 gradient
+        decoder_grad = grad_estimate_avg[p_trigger_param_num:]  # 뒷부분 → decoder의 gradient
 
         # **p_trigger 업데이트**
         p_trigger_vector = torch.nn.utils.parameters_to_vector([coordinator.dec.p_trigger])  # 기존 p_trigger 값 벡터화
@@ -426,7 +373,7 @@ class SPSA:
 
         print("after update")
         print(coordinator.dec.p_trigger[:, :10])
-        return loss_plus, loss_minus, grad_estimate
+        return loss_plus_list, loss_minus_list, grad_estimate_avg
 
 
 #########################################
@@ -462,34 +409,7 @@ def preprocess_data(batch):
     
 processed_dataset = [preprocess_data(item) for item in dataset]
 
-
-
-
-###################
-##### 학습 루프 #####
-###################
-
-# print("Update method: ", LOSS_FN)
-# spsa = SPSA(alpha=ALPHA, gamma=GAMMA, epsilon=EPSILON, ak=AK, ck=CK, o=O, p_trigger_epsilon=P_TRIGGER_EPSILON)
-# for step, batch in enumerate(processed_dataset):
-#     mel = batch["mel"].to(device)
-#     labels = batch["labels"].unsqueeze(0).to(device)
-
-#     loss_plus, loss_minus, grad_estimate = spsa.spsa_update(coordinator, whisper_model, mel, labels)
-
-#     spsa.parameter_update(step+1)
-
-#     if step % LOG_INTERVER == 0:
-#         print(f"Step {step}: WER Loss+ = {loss_plus}, Loss- = {loss_minus}")
-
-#     if step >= MAX_STEPS:
-#         break
-
-# # 학습 완료 후 모델 저장
-# torch.save(coordinator.state_dict(), "coordinator.pth")
-# print("Coordinator saved!")
-
-
+# ✅ CustomDataset 및 DataLoader 정의
 from torch.utils.data import DataLoader, Dataset
 from torch.nn.utils.rnn import pad_sequence
 
@@ -520,6 +440,11 @@ dataloader = DataLoader(dataset, batch_size=BATCH_SIZE, shuffle=True, collate_fn
 
 
 
+
+###################
+##### 학습 루프 #####
+###################
+
 print("Update method: ", LOSS_FN)
 spsa = SPSA(alpha=ALPHA, gamma=GAMMA, epsilon=EPSILON, ak=AK, ck=CK, o=O, p_trigger_epsilon=P_TRIGGER_EPSILON)
 
@@ -528,54 +453,24 @@ for epoch in range(MAX_STEPS):  # MAX_STEPS 만큼 반복
     num_batches = 0  # 배치 개수 카운트
 
     for batch in dataloader:
-        mel = batch["mel"].to(device)  # ✅ 배치 데이터를 텐서로 변환
-        labels = batch["labels"].to(device)  # ✅ 패딩된 labels 텐서 변환
+        mel = batch["mel"].to(device)  # 배치 데이터를 텐서로 변환
+        labels = batch["labels"].to(device)  # 패딩된 labels 텐서 변환
 
-        loss_plus, loss_minus, grad_estimate = spsa.spsa_update(coordinator, whisper_model, mel, labels)
+        loss_plus_list, loss_minus_list, grad_estimate_avg = spsa.spsa_update(coordinator, whisper_model, mel, labels)
 
-        loss = (loss_plus + loss_minus) / 2
+        loss = (sum(loss_plus_list) + sum(loss_minus_list)) / 2
         total_loss += loss
         num_batches += 1
 
         spsa.parameter_update(epoch+1)
 
-    # ✅ 해당 에폭의 평균 Loss 계산
+    # 해당 에폭의 평균 Loss 계산
     avg_loss = total_loss / num_batches
 
     print(f"Epoch {epoch}: Avg WER Loss = {avg_loss:.4f}")
 
     if epoch >= MAX_STEPS:
         break
-
-# 학습 완료 후 모델 저장
-torch.save(coordinator.state_dict(), "coordinator.pth")
-print("Coordinator saved!")
-
-# for epoch in range(MAX_STEPS):  # MAX_STEPS 만큼 반복
-#     total_loss = 0.0 
-#     num_batches = 0  # 배치 개수 카운트
-
-#     for batch in dataloader:
-#         mel = torch.cat([b["mel"] for b in batch]).to(device)  # ✅ 배치 데이터를 텐서로 변환
-#         labels = torch.cat([b["labels"].unsqueeze(0) for b in batch]).to(device)  # ✅ 배치 형태 변환
-
-#         loss_plus, loss_minus, grad_estimate = spsa.spsa_update(coordinator, whisper_model, mel, labels)
-
-#         loss = (loss_plus + loss_minus) / 2
-#         total_loss += loss
-#         num_batches += 1
-
-#         spsa.parameter_update(epoch+1)
-
-
-
-#     # ✅ 해당 에폭의 평균 Loss 계산
-#     avg_loss = total_loss / num_batches
-
-#     print(f"Epoch {epoch}: Avg WER Loss = {avg_loss:.4f}")
-
-#     if epoch >= MAX_STEPS:
-#         break
 
 # 학습 완료 후 모델 저장
 torch.save(coordinator.state_dict(), "coordinator.pth")
