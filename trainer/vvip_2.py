@@ -333,7 +333,7 @@ class SPSA:
         mel_with_delta = mel + mel_transformed  
         if LOSS_FN == "wer":
             # Whisper 모델을 배치 단위로 호출
-            predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
+            predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS, language="en")
 
             # 배치 단위 WER 계산
             ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
@@ -355,7 +355,7 @@ class SPSA:
         mel_with_delta = mel + mel_transformed  
 
         # Whisper 모델을 배치 단위로 호출
-        predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS)
+        predictions = whisper_model.generate(input_features=mel_with_delta, max_new_tokens=MAX_NEW_TOKENS, language="en")
 
         # 배치 단위 WER 계산
         ref_texts = tokenizer.batch_decode(labels, skip_special_tokens=True)
@@ -373,9 +373,8 @@ class SPSA:
         else:
             raise ValueError("Loss function not supported")
 
-        # ✅ 배치 내 모든 샘플의 평균 gradient 계산
-        grad_estimate_avg =  (loss_plus_avg - loss_minus_avg) / (2 * self.ck * perturb)
-        # grad_estimate_avg =  (loss_plus - loss_minus) / (2 * self.ck * perturb)
+        # 배치 내 모든 샘플의 평균 gradient 계산
+        grad_estimate_avg =  (loss_plus - loss_minus) / (2 * self.ck * perturb)
 
         # Gradient Clipping 적용
         grad_estimate_avg = torch.clamp(grad_estimate_avg, min=-MAX_GRAD, max=MAX_GRAD)
